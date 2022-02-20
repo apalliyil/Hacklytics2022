@@ -1,0 +1,163 @@
+import json
+import time
+!pip install spotipy
+!pip install requests
+!pip install pandas
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import random
+
+import requests
+client_id = '40f36523ec7843a39dd24babc965192e'
+client_secret = 'de12975f3ad24fe5a0b0029f00c0db8c'
+client_credentials_manager = SpotifyClientCredentials(client_id, client_secret)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+def get_track_ids(p_id):
+    music_id_list=[]
+    playlist = sp.playlist(p_id)
+    for item in playlist['tracks']['items']:
+        music_track = item['track']
+        mustic_id_list = music_id_list.append(music_track['id'])
+    return music_id_list
+
+def get_track_data(track_id):
+    meta = sp.track(track_id)
+    #print(meta)
+    track_details = {"id": track_id, "track popularity":meta['popularity'],
+    "name":meta['name'],
+    "artist":meta['album']['artists'][0]['name']    
+    }
+    return track_details
+
+
+def getTracksFromInputID():
+    playlist_id = input('Enter the playlist url:')
+    playlist_id = playlist_id.split("t/", 1)
+    p_id = playlist_id[1]
+    track_ids = get_track_ids(p_id)
+    #print(len(track_ids))
+    #print(track_ids)
+
+    tracks = []
+    for i in range(len(track_ids)):
+        time.sleep(.5)
+        track = get_track_data(track_ids[i])
+        tracks.append(track)
+
+
+    with open('spotify_data.json', 'w') as outfile:
+        json.dump(tracks, outfile, indent = 4)
+    
+    return track_ids
+    
+    import requests
+
+def convertTrackToTrackWithFeatures(track_ids):
+    AUTH_URL = 'https://accounts.spotify.com/api/token'
+
+    # POST
+    auth_response = requests.post(AUTH_URL, {
+        'grant_type': 'client_credentials',
+        'client_id': '40f36523ec7843a39dd24babc965192e',
+        'client_secret': 'de12975f3ad24fe5a0b0029f00c0db8c',
+    })
+
+    # convert the response to JSON
+    auth_response_data = auth_response.json()
+
+    # save the access token
+    access_token = auth_response_data['access_token']
+
+
+    headers = {
+     'Authorization': 'Bearer {token}'.format(token=access_token)
+    }
+
+    BASE_URL = 'https://api.spotify.com/v1/'
+
+    songsWithAllFeatures = []
+
+    for song in track_ids:
+        r = requests.get(BASE_URL + 'audio-features/' + song, headers=headers)
+        features_dict = r.json()
+        try:
+           #print(features_dict["danceability"])
+            #print(features_dict["valence"])
+            #print(features_dict["tempo"])
+            newFeatures_dict = {}
+            newFeatures_dict["danceability"] = features_dict["danceability"]
+            newFeatures_dict["valence"] = features_dict["valence"]
+            newFeatures_dict["tempo"] = features_dict["tempo"]
+            trackDict = get_track_data(song)
+            Merge(newFeatures_dict, trackDict)
+            songsWithAllFeatures.append(trackDict)
+        except:
+            continue
+
+
+
+    return songsWithAllFeatures
+
+def Merge(dict1, dict2):
+    return(dict2.update(dict1))
+
+
+def survivalOfFittest(songsWithAllFeatures):
+    if(len(mpTemp) == 0): #first person to call
+        for song in songsWithAllFeatures:
+            score = 0.1 * song["track popularity"] * 0.01 * song["tempo"] * song["valence"] * song["danceability"]
+            mpTemp.append([song["id"], score])
+    else:
+        for song in songsWithAllFeatures:
+            score = 0.1 * song["track popularity"] * 0.01 * song["tempo"] * song["valence"] * song["danceability"]
+            if [song["id"], score] not in mpTemp:
+                mpTemp.append([song["id"], score])
+
+#find average of the scores:
+
+def findAverageScore(mpTemp):
+    sumOfScores = 0
+    size = 0
+    for song in mpTemp:
+        sumOfScores += float(str(song[1]))
+        size+= 1
+    return sumOfScores / size
+
+def addSurvived(mpTemp): # add survived songs with modifiedScore valued at absolute value of score and average score
+    avgScore = findAverageScore(mpTemp)
+    for song in mpTemp:
+        c = abs(avgScore - song[1])
+        masterPlayList.append([song[0], c])
+
+
+def getModifiedScore(song):
+    return song[1]
+
+
+def sortMasterPlaylist(array):
+    masterPlayList = sorted(array, key=getModifiedScore)
+    return masterPlayList
+
+
+masterPlayList = [] #list of all songs that have been attempted to be added into playlist, not necessarily the actual playlist in spotify
+mpTemp = []
+
+i = 0
+n = int(input("How many playlists would you like to add? "))
+while (i < n):
+    tid = getTracksFromInputID()
+    twf = convertTrackToTrackWithFeatures(tid)
+    survivalOfFittest(twf)
+    addSurvived(mpTemp)
+    sortMasterPlaylist(masterPlayList)
+    i += 1
+
+actualPlaylist = []
+for index in masterPlayList:
+    actualPlaylist.append(index[0])
+print(actualPlaylist)
+while(len(actualPlaylist) > 20):
+    actualPlaylist.pop()
+for index in actualPlaylist:
+    print(get_track_data(index).get('name'),'\n')
